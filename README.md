@@ -2,7 +2,9 @@
 
 A local web app for editing PlantUML class diagrams with draggable layout. Write PlantUML code, render it through a real PlantUML engine, then drag classes and packages around by hand.
 
-![Demo](public/assets/Plantuml-Drag-Demo2.webm)
+<!--- ![Demo](public/assets/Plantuml-Drag-Demo2.webm) -->
+[Plantuml-Drag-Demo.webm](https://github.com/user-attachments/assets/fa87c1d7-a109-4826-be14-09dc9ab4df27)
+
 
 ## How To Use
 
