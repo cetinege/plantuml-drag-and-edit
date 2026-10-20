@@ -16,7 +16,7 @@ export function createGuideLines(svgRoot, nodes){
             return;
         }
 
-        const line = document.createElementNS('SVG_NS', 'line');
+        const line = document.createElementNS(SVG_NS, 'line');
 
         // Tagged with a dedicated class so it can be:
         // styled via CSS (styles.css) and stripped out of exported SVG/PNG clones
