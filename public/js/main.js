@@ -259,69 +259,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Reference to this node's dashed guide-line <line> element
                 guideLine: null
             };     
-
-            // Inside buildNodes(svgRoot), for the 'cluster' type:
-            if (type === 'cluster') {
-                const foreignObj = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-                foreignObj.setAttribute('class', 'pu-color-picker-container');
-                foreignObj.setAttribute('x', box.x + box.width - 35);
-                foreignObj.setAttribute('y', box.y + 30);
-                foreignObj.setAttribute('width', '30');
-                foreignObj.setAttribute('height', '30');
-                foreignObj.style.overflow = 'visible';
-
-                const colorInput = document.createElement('input');
-                colorInput.type = 'color';
-                colorInput.value = getNodeBackgroundColor({ groupEl: g }) || '#ffffff';
-                colorInput.className = 'pu-package-color-picker';
-                colorInput.title = 'Change package background color';
-                
-                colorInput.style.width = '24px';
-                colorInput.style.height = '24px';
-                colorInput.style.border = '1px solid #ccc';
-                colorInput.style.borderRadius = '4px';
-                colorInput.style.cursor = 'pointer';
-                colorInput.style.background = 'transparent';
-
-                colorInput.addEventListener('mousedown', (ev) => {
-                    ev.stopPropagation();
-                });
-
-                colorInput.addEventListener('input', (ev) => {
-                    const newColor = ev.target.value;
-                    setPackageBackgroundColor(g, newColor);
-                });
-
-                foreignObj.appendChild(colorInput);
-                svgRoot.appendChild(foreignObj);
-
-                // Save reference in the node object for updating position later
-                // (Ensure you add `colorPickerObj: foreignObj` to your nodes[id] object definition too)
-                nodes[id].colorPickerObj = foreignObj;
-            }
         });
         return nodes;
-    }
-
-    function getNodeBackgroundColor(node) {
-        if (!node || !node.groupEl) return null;
-        const shapeEl = node.groupEl.querySelector('rect, path, polygon');
-        if (!shapeEl) return null;
-        let fill = shapeEl.getAttribute('fill');
-        if (!fill || fill === 'none') {
-            const computedStyle = window.getComputedStyle(shapeEl);
-            fill = computedStyle.fill;
-        }
-        return fill !== 'none' ? fill : null;
-    }
-
-    function setPackageBackgroundColor(clusterGroupEl, color) {
-        // Target the background shape inside the cluster
-        const shapeEl = clusterGroupEl.querySelector('rect, path, polygon');
-        if (shapeEl) {
-            shapeEl.setAttribute('fill', color);
-            shapeEl.style.fill = color;
-        }
     }
 
     // A class belongs to a package if its qualified name's prefix
@@ -581,17 +520,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Apply CSS SVG transform translate attribute using distance moved from initial coordinates
         node.groupEl.setAttribute('transform', `translate(${clampedX - node.origX},${clampedY - node.origY})`);
 
-        // If this node has a color picker attached, update its position as well
-        if (node.colorPickerObj) {
-            const initialX = node.origX + node.w - 35;
-            const initialY = node.origY + 30;
-            node.colorPickerObj.setAttribute('x', initialX + (clampedX - node.origX));
-            node.colorPickerObj.setAttribute('y', initialY + (clampedY - node.origY));
-        }
-
         // Update the stored current positions
         node.curX = clampedX;
         node.curY = clampedY;
+
+        // Keep the package's colour picker attached to its corner
+        updatePickerPosition(node);
+
     }
 
     // Handles dragging logic for entity nodes and packages/clusters
