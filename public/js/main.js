@@ -5,6 +5,7 @@ import { redrawAllEdges } from './diagram/edges.js';
 import { createGuideLines } from './diagram/guides.js';
 import { attachDragHandlers } from './diagram/drag.js';
 import { initExportButtons } from './ui/exporter.js';
+import { initSplitter } from './ui/splitter.js';
 
 // Wait for the HTML document structure to fully load before running the script
 document.addEventListener('DOMContentLoaded', () => {
@@ -21,10 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // svgCanvas is the INNER div that actually gets overwritten on each render.
     const svgHost = document.getElementById('svgHost');
     const svgCanvas = document.getElementById('svgCanvas')
-
-    const resizer = document.getElementById('resizer');
-    const editorColumn = document.getElementById('editorColumn');
-    const appContainer = document.getElementById('appContainer');
 
     const bgColorInput = document.getElementById('bgColorInput');
     // Default canvas colour
@@ -70,53 +67,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 300);
     });
 
+    // Sidebar drag-to-resize (splitter.js handles the mouse logic).
+    // The callback runs on every move so the diagram canvas refits.
+    initSplitter(() => {
+        if (activeSvgRoot) expandSvgCanvas(activeSvgRoot, svgHost);
+    });
 
-
-    // SPLIT RESIZER LOGIC
-    let isResizing = false;
-    if (resizer && editorColumn && appContainer) {
-        resizer.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            resizer.classList.add('resizing');
-            document.body.style.cursor = 'col-resize';
-            document.body.style.userSelect = 'none'; // Prevents text highlighting while dragging
-        });
-
-        window.addEventListener('mousemove', (e) => {
-            if (!isResizing){
-                return;
-            }
-            
-            const containerWidth = appContainer.clientWidth;
-
-            // Minimum resizing limit 
-            const minWidthPixels = containerWidth * 0.10; 
-
-            let newWidth = e.clientX;
-
-            // Clamp left side to minimum 15% width
-            if (newWidth < minWidthPixels) {
-                newWidth = minWidthPixels;
-            }
-
-            editorColumn.style.width = `${newWidth}px`;
-
-            // If an SVG is currently rendered, adjust canvas bounds on resize
-            if (activeSvgRoot) {
-                expandSvgCanvas(activeSvgRoot, svgHost);
-            }
-        });
-
-        window.addEventListener('mouseup', () => {
-            if (isResizing) {
-                isResizing = false;
-                resizer.classList.remove('resizing');
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-            }
-        });
-    }
-    
 
     renderBtn.addEventListener('click', async () => {
         const code = codeInput.value.trim();
