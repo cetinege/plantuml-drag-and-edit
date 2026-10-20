@@ -5,7 +5,7 @@
 // Where a line from the box's centre toward (towardX, towardY) crosses the
 // box's border. Used so connectors stop at node edges, not centres.
 // Compute rectangle boundary intersection so arrows stop at node borders
-function rectEdgeIntersection(box, towardX, towardY) {
+export function rectEdgeIntersection(box, towardX, towardY) {
 
     // Find the center coordinates of the bounding box
     const cx = box.curX + box.w / 2
@@ -38,7 +38,7 @@ function rectEdgeIntersection(box, towardX, towardY) {
 // Finds the closest point on a line segment to a text label, and records its relative position
 // Remembers where a label sits along an arrow (e.g. 50% way through) and its offset,
 // so when nodes are dragged, the label moves smoothly with the updated line.
-function getLabelLineProjection(labelX, labelY, lineStartX, lineStartY, lineEndX, lineEndY) {
+export function getLabelLineProjection(labelX, labelY, lineStartX, lineStartY, lineEndX, lineEndY) {
 
     // Measure the total horizontal and vertical distance of the line segment
     const lineDeltaX = lineEndX - lineStartX;
@@ -65,7 +65,7 @@ function getLabelLineProjection(labelX, labelY, lineStartX, lineStartY, lineEndX
 
 // Checks if a overlaps b
 // Used to check if the class has been dragged out of its class completely (if so show dashed lines)
-function rectsOverlap(a, b) {
+export function rectsOverlap(a, b) {
     return !(
         a.curX + a.w <= b.curX ||
         b.curX + b.w <= a.curX ||
@@ -75,7 +75,7 @@ function rectsOverlap(a, b) {
 }
 
 // Transform screen click coordinates into SVG canvas space coordinates
-function getSvgPoint(svgRoot, ev) {
+export function getSvgPoint(svgRoot, ev) {
 
     // Create an empty SVG point object
     const point = svgRoot.createSVGPoint();

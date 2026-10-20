@@ -14,7 +14,7 @@ export function getNodeBackgroundColor(node) {
 }
 
 // Paint a package's background shape
-function setPackageBackgroundColor(clusterGroupEl, color) {
+export function setPackageBackgroundColor(clusterGroupEl, color) {
     // Target the background shape inside the cluster
     const shapeEl = clusterGroupEl.querySelector('rect, path, polygon');
     if (shapeEl) {
