@@ -1,4 +1,3 @@
-import { STORAGE_KEYS } from './config.js';
 import { createPackageColorPickers } from './diagram/packageColor.js';
 import { buildNodes, groupNodes, buildEdges } from './diagram/parser.js';
 import { redrawAllEdges } from './diagram/edges.js';
@@ -6,6 +5,7 @@ import { createGuideLines } from './diagram/guides.js';
 import { attachDragHandlers } from './diagram/drag.js';
 import { initExportButtons } from './ui/exporter.js';
 import { initSplitter } from './ui/splitter.js';
+import { loadSavedCode, loadSavedSvg, saveSvg, saveCodeDebounced } from './services/storage.js';
 
 // Wait for the HTML document structure to fully load before running the script
 document.addEventListener('DOMContentLoaded', () => {
@@ -30,42 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Reference to store current active SVG root element for window resize adjustments
     let activeSvgRoot = null;
 
-    // Restore whatever the user last typed, so refreshing the page doesn't wipe out unsaved work. 
-    // Falls back silently to the textarea's default placeholder content if nothing has been saved yet.
-    try {
-        const savedCode = localStorage.getItem(STORAGE_KEYS.CODE);
-        if (savedCode !== null) {
-            codeInput.value = savedCode;
-        }
-    } catch (err) {
-        console.warn('Could not read saved code from localStorage:', err);
-    }
 
-    // Restore the last-rendered diagram (pre-drag layout) so the canvas isn't empty after a refresh. 
-    // This gets overwritten the next time the user clicks "Render Diagram".
-    try {
-        const savedSvg = localStorage.getItem(STORAGE_KEYS.SVG);
-        if (savedSvg) {
-            initDiagram(savedSvg);
-        }
-    } catch (err) {
-        console.warn('Could not read saved diagram from localStorage:', err);
-    }
+    const savedCode = loadSavedCode();
+    if (savedCode !== null) codeInput.value = savedCode;
 
-    // Do not writing to localStorage on every single keystroke
-    let codeSaveTimeout = null;
+    const savedSvg = loadSavedSvg();
+    if (savedSvg) initDiagram(savedSvg);
 
     // Persist code as the user types
-    codeInput.addEventListener('input', () => {
-        clearTimeout(codeSaveTimeout);
-        codeSaveTimeout = setTimeout(() => {
-            try {
-                localStorage.setItem(STORAGE_KEYS.CODE, codeInput.value);
-            } catch (err) {
-                console.warn('Could not save code to localStorage:', err);
-            }
-        }, 300);
-    });
+    codeInput.addEventListener('input', () => saveCodeDebounced(codeInput.value));
 
     // Sidebar drag-to-resize (splitter.js handles the mouse logic).
     // The callback runs on every move so the diagram canvas refits.
@@ -102,11 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const rawSvg = await response.text();
 
             // Persist the newly rendered (pre-drag) diagram so a page refresh restores it.
-            try {
-                localStorage.setItem(STORAGE_KEYS.SVG, rawSvg);
-            } catch (err) {
-                console.warn('Could not save diagram to localStorage:', err);
-            }
+            saveSvg(rawSvg);
             initDiagram(rawSvg);
 
         } catch (error) {
