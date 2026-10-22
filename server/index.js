@@ -72,4 +72,7 @@ app.post('/render', (req, res) => {
     });
 });
 
-app.listen(3000, () => console.log('Running on http://localhost:3000'));
+// Hosting platforms choose the port and pass it in through the PORTenvironment variable. 
+// Fall back to 3000 for local development.
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Running on port ${PORT}`));
