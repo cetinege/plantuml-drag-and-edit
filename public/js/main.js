@@ -65,7 +65,13 @@ async function renderDiagram() {
         });
 
         if (!response.ok) {
-            throw new Error('Server returned an error processing the diagram.');
+            // The server replies with a short reason: "Server is busy...",
+            // "Too many renders...", "Rendering took too long.", etc.
+            const text = await response.text();
+
+            // Only trust short plain text. A proxy error page would be HTML.
+            const isPlainMessage = text.length > 0 && text.length < 200 && !text.startsWith('<');
+            throw new Error(isPlainMessage ? text : 'Server returned an error processing the diagram.');
         }
 
         const rawSvg = await response.text();
@@ -76,7 +82,9 @@ async function renderDiagram() {
 
     } catch (error) {
         console.error('Rendering error:', error);
-        alert('Failed to render diagram.');
+
+        // fetch itself throws a TypeError when it can't reach the server at all
+        alert(error instanceof TypeError ? 'Could not reach the server.' : error.message);
     }
 }
 
