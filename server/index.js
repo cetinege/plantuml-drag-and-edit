@@ -2,9 +2,9 @@
 // Express provides clean abstractions for routing and middleware.
 const express = require('express');
 
-// exec allows Node.js to make a system shell and execute external commands 
+// exec allows Node.js to make a system shell and execute external commands (spawn is arguments as an array)
 // (like java -jar which is needed for PlantUML API).
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 
 // filesystem - import the built-in File System module to perform disk operations.
 const fs = require('fs');
@@ -21,58 +21,83 @@ app.use(express.json());
 // Allow browser to access files/assets in public directory
 app.use(express.static('public'));
 
-// Define an HTTP POST endpoint
+// Hosting platforms choose the port and pass it in through the PORTenvironment variable. 
+// Fall back to 3000 for local development.
+// Environment variables are named values that the operating system gives to a process when it starts. 
+// They’re a way to configure a program from outside, without editing its code. In Node they’re available on the process.env object.
+const PORT = process.env.PORT || 3000;
+
+// Construct absolute path to the jar file
+const JAR_PATH = path.join(__dirname, 'plantuml.jar');
+
+// Limits live at the top and can be overridden with environment variables
+// on the host, so tuning them later needs no code change.
+const RENDER_TIMEOUT_MS = Number(process.env.RENDER_TIMEOUT_MS) || 15000;
+
 // GET requests pass parameters in the URL, which has strict character limits and can break with special characters.
 // POST sends data inside the request body which allows large diagram markup strings.
 app.post('/render', (req, res) => {
 
     // Extract PlantUML markup string sent from the client/browser
-    const code = req.body.code;
-    
-    // Create absolute paths for the diagrams
-    const diagramSourcePath = path.join(__dirname, 'temp_diagram.puml');
-    const diagramOutputPath = path.join(__dirname, 'temp_diagram.svg');
+    const code = req.body && req.body.code;
 
-    // Construct absolute path to the jar file
-    const jarPath = path.join(__dirname, 'plantuml.jar');
+    if (typeof code !== 'string' || !code.trim()) {
+        return res.status(400).send('Missing PlantUML code.');
+    }
 
-    // Write the PlantUML string to disk at diagram.puml.
-    // PlantUML requires an actual file on disk to process. 
-    fs.writeFile(diagramSourcePath, code, (writeErr) => {
+    // -pipe: PlantUML reads the diagram from stdin and writes the SVG to
+    // stdout, so there are no temp files at all. spawn takes arguments as
+    // an array (not one shell string), so user input is never run as a command.
+    const java = spawn(
+        'java',
+        ['-Djava.awt.headless=true', '-jar', JAR_PATH, '-tsvg', '-pipe'],
+        { timeout: RENDER_TIMEOUT_MS } // Node kills the process after this long
+    );
 
-        if (writeErr) {
-            console.error('File write error:', writeErr);
-            return res.status(500).send('Failed to create temporary input file.');
+    const chunks = [];
+    let stderr = '';
+    let finished = false;
+
+    // Send exactly one response, even if several events fire
+    const finish = (status, body, type) => {
+        if (finished) return;
+        finished = true;
+        if (type) res.type(type);
+        res.status(status).send(body);
+    };
+
+    java.stdout.on('data', (chunk) => chunks.push(chunk));
+    java.stderr.on('data', (chunk) => { stderr += chunk; });
+
+    // If Java exits before we finish writing, Node emits an error on
+    // stdin. With no handler, that error would crash the whole server.
+    java.stdin.on('error', () => {});
+
+    java.on('error', (err) => {
+        console.error('Failed to start Java:', err);
+        finish(500, 'Rendering engine failed to start.');
+    });
+
+    java.on('close', (exitCode, signal) => {
+
+        // A signal means we killed it (timeout)
+        if (signal) {
+            console.error('Render timed out');
+            return finish(504, 'Rendering took too long.');
         }
 
-        exec(`java -jar "${jarPath}" -tsvg "${diagramSourcePath}"`, (err, stdout, stderr) => {
+        const svg = Buffer.concat(chunks).toString('utf8');
 
-            if (stderr) console.error('PlantUML stderr:', stderr);
-            if (err) console.error('exec error:', err);
+        if (!svg.includes('<svg')) {
+            console.error('PlantUML failed:', { exitCode, stderr });
+            return finish(500, 'PlantUML failed to render.');
+        }
 
-            if (fs.existsSync(diagramSourcePath)) {
-                fs.unlinkSync(diagramSourcePath);
-            }
-
-            if (err) {
-                return res.status(500).send('PlantUML failed to render. How sad, try again.');
-            }
-
-            fs.readFile(diagramOutputPath, 'utf8', (readErr, svgData) => {
-                if (fs.existsSync(diagramOutputPath)) {
-                    fs.unlinkSync(diagramOutputPath);
-                }
-                if (readErr) {
-                    console.error('File read error:', readErr);
-                    return res.status(500).send('Failed to read rendered SVG output.');
-                }
-                res.type('image/svg+xml').send(svgData);
-            });
-        });
+        finish(200, svg, 'image/svg+xml');
     });
+
+    java.stdin.end(code); // send the diagram text and close stdin
+
 });
 
-// Hosting platforms choose the port and pass it in through the PORTenvironment variable. 
-// Fall back to 3000 for local development.
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Running on port ${PORT}`));
