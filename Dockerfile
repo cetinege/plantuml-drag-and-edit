@@ -41,6 +41,16 @@ COPY . .
 # It includes Unicode character set too now.
 ENV LC_ALL=C.UTF-8
 
+# Run as the unprivileged "node" user that the Node image already provides, instead of root.
+# How it works: 
+# -------------
+# By default, everything in a container runs as root.
+# USER node makes every instruction after it, and the running container, use the node user instead. 
+# If someone finds a way to run commands through the server, they get the privileges of whatever user it runs as. 
+# As root inside the container, they could change system files and install software. 
+# As node, they can do much less. Small and easy protection.
+USER node
+
 EXPOSE 3000
 
 CMD ["node", "server/index.js"]
