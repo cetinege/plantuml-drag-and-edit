@@ -1,0 +1,4 @@
+node_modules
+.git
+.idea
+server/plantuml.jar

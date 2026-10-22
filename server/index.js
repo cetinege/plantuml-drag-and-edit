@@ -15,9 +15,10 @@ const path = require('path');
 // Instantiate express object
 const app = express();
 
-// On Render, every request arrives through their load balancer, so without
-// this every visitor would appear to have the same IP and share one limit.
-// "1" = trust one proxy hop and read the real client IP from X-Forwarded-For.
+// On Render, requests reach this app through Render's proxy, so every
+// request appears to come from the proxy's IP. The visitor's real IP is
+// in the X-Forwarded-For header. This setting tells Express to use it.
+// Without it, all visitors would share one rate limit (The rate limiter counts requests per IP, so it would treat all your users as one person). 
 app.set('trust proxy', 1);
 
 // Parse incoming JSON payloads and populate req.body
