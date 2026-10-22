@@ -57,35 +57,30 @@ async function renderDiagram() {
         return;
     }
 
+    let response;
     try {
-        const response = await fetch('/render', {
+        response = await fetch('/render', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code })
         });
-
-        if (!response.ok) {
-            // The server replies with a short reason: "Server is busy...",
-            // "Too many renders...", "Rendering took too long.", etc.
-            const text = await response.text();
-
-            // Only trust short plain text. A proxy error page would be HTML.
-            const isPlainMessage = text.length > 0 && text.length < 200 && !text.startsWith('<');
-            throw new Error(isPlainMessage ? text : 'Server returned an error processing the diagram.');
-        }
-
-        const rawSvg = await response.text();
-
-        // Saved so a page refresh restores the (pre-drag) diagram
-        saveSvg(rawSvg);
-        initDiagram(rawSvg);
-
-    } catch (error) {
-        console.error('Rendering error:', error);
-
-        // fetch itself throws a TypeError when it can't reach the server at all
-        alert(error instanceof TypeError ? 'Could not reach the server.' : error.message);
+    } catch {
+        // fetch only throws when it can't reach the server at all
+        alert('Could not reach the server.');
+        return;
     }
+
+    if (!response.ok) {
+        const text = await response.text();
+        const isPlainMessage = text.length > 0 && text.length < 200 && !text.startsWith('<');
+        alert(isPlainMessage ? text : 'Server returned an error processing the diagram.');
+        return;
+    }
+
+    const rawSvg = await response.text();
+    saveSvg(rawSvg);
+    initDiagram(rawSvg);
+
 }
 
 // Restore the previous session
