@@ -1,4 +1,4 @@
-FROM node:24
+FROM node:24-bookworm-slim
 
 # System packages PlantUML needs: Java to run it, Graphviz for diagram
 # layout, and fonts so text can be measured when sizing boxes.
@@ -8,12 +8,14 @@ FROM node:24
 # apt-get update refreshes the package list, and install installs from it.
 # -y auto-answers yes, since a build can’t prompt you. --no-install-recommends skips optional extras to keep the image small.
 # default-jre-headless is Java without graphics libraries, which is all PlantUML needs.
+# The slim image has no curl, and the Dockerfile uses it to download the PlantUML jar, so install it.
+# ca-certificates is the set of trusted certificates that HTTPS needs. Without it, curl fails with a certificate error.
 # rm -rf /var/lib/apt/lists/* deletes the downloaded package lists. It must be in the same RUN, because a file deleted in a later layer still takes up space in the earlier one.
-RUN apt-get update \
+ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      default-jre-headless graphviz fontconfig fonts-dejavu-core \
+      default-jre-headless graphviz fontconfig fonts-dejavu-core curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
-
+ 
 WORKDIR /app
 
 COPY package*.json ./
