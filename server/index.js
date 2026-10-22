@@ -1,3 +1,6 @@
+// Counts requests per visitor and blocks any visitor who sends too many in a short time.
+const { rateLimit } = require('express-rate-limit');
+
 // Writing a raw HTTP server using Node's built-in http module requires manually parsing URLs, body streams, and static assets.
 // Express provides clean abstractions for routing and middleware.
 const express = require('express');
@@ -11,6 +14,11 @@ const path = require('path');
 
 // Instantiate express object
 const app = express();
+
+// On Render, every request arrives through their load balancer, so without
+// this every visitor would appear to have the same IP and share one limit.
+// "1" = trust one proxy hop and read the real client IP from X-Forwarded-For.
+app.set('trust proxy', 1);
 
 // Parse incoming JSON payloads and populate req.body
 app.use(express.json());
@@ -33,6 +41,7 @@ const RENDER_TIMEOUT_MS = Number(process.env.RENDER_TIMEOUT_MS) || 15000;
 
 // Each render starts a JVM, which is memory-hungry. Too many at once can
 // exhaust RAM and take the whole server down, so need to cap how many run together.
+// Default of 2 for now...
 const MAX_CONCURRENT_RENDERS = Number(process.env.MAX_CONCURRENT_RENDERS) || 2;
 
 // activeRenders counts the renders in progress. A request takes a slot before starting Java and gives it back in finish. 
@@ -42,9 +51,19 @@ const MAX_CONCURRENT_RENDERS = Number(process.env.MAX_CONCURRENT_RENDERS) || 2;
 // so two simultaneous requests can’t both pass the check on the last free slot.
 let activeRenders = 0;
 
+// Per-IP limit: at most RATE_LIMIT_MAX renders per window. Defaults are
+// generous for a person editing and re-rendering, but stop scripts.
+const renderLimiter = rateLimit({
+    windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 60 * 1000, // 1 minute
+    limit: Number(process.env.RATE_LIMIT_MAX) || 30,
+    standardHeaders: 'draft-7', // tells clients their remaining quota
+    legacyHeaders: false,
+    message: 'Too many renders. Please wait a minute and try again.'
+});
+
 // GET requests pass parameters in the URL, which has strict character limits and can break with special characters.
 // POST sends data inside the request body which allows large diagram markup strings.
-app.post('/render', (req, res) => {
+app.post('/render', renderLimiter, (req, res) => {
 
     // Extract PlantUML markup string sent from the client/browser
     const code = req.body && req.body.code;
