@@ -5,8 +5,8 @@ const { rateLimit } = require('express-rate-limit');
 // Express provides clean abstractions for routing and middleware.
 const express = require('express');
 
-// exec allows Node.js to make a system shell and execute external commands (spawn is arguments as an array)
-// (like java -jar which is needed for PlantUML API).
+// spawn starts an external program (Java) and gives us its input/output
+// streams. Arguments are passed as an array, so no shell ever parses them.
 const { spawn } = require('child_process');
 
 // Import the Path module to manage file directory paths across OSs.
@@ -25,7 +25,7 @@ app.set('trust proxy', 1);
 app.use(express.json());
 
 // Allow browser to access files/assets in public directory
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Hosting platforms choose the port and pass it in through the PORTenvironment variable. 
 // Fall back to 3000 for local development.
