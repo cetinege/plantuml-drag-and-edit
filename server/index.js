@@ -31,6 +31,17 @@ const JAR_PATH = path.join(__dirname, 'plantuml.jar');
 // on the host, so tuning them later needs no code change.
 const RENDER_TIMEOUT_MS = Number(process.env.RENDER_TIMEOUT_MS) || 15000;
 
+// Each render starts a JVM, which is memory-hungry. Too many at once can
+// exhaust RAM and take the whole server down, so need to cap how many run together.
+const MAX_CONCURRENT_RENDERS = Number(process.env.MAX_CONCURRENT_RENDERS) || 2;
+
+// activeRenders counts the renders in progress. A request takes a slot before starting Java and gives it back in finish. 
+// Every path ends in finish (success, PlantUML failure, timeout or failed start), and its finished flag makes sure it runs only once. 
+// So the counter can’t leak and permanently lock the server.
+// The check and the increment happen in the same synchronous block, and Node runs one piece of JavaScript at a time,
+// so two simultaneous requests can’t both pass the check on the last free slot.
+let activeRenders = 0;
+
 // GET requests pass parameters in the URL, which has strict character limits and can break with special characters.
 // POST sends data inside the request body which allows large diagram markup strings.
 app.post('/render', (req, res) => {
@@ -41,6 +52,14 @@ app.post('/render', (req, res) => {
     if (typeof code !== 'string' || !code.trim()) {
         return res.status(400).send('Missing PlantUML code.');
     }
+
+    if (activeRenders >= MAX_CONCURRENT_RENDERS) {
+        // 503 = temporarily unavailable. Retry-After tells well-behaved clients
+        // how many seconds to wait before trying again.
+        res.set('Retry-After', '2');
+        return res.status(503).send('Server is busy, please try again in a few seconds.');
+    }
+    activeRenders++; // take a slot
 
     // -pipe: PlantUML reads the diagram from stdin and writes the SVG to
     // stdout, so there are no temp files at all. spawn takes arguments as
@@ -66,6 +85,7 @@ app.post('/render', (req, res) => {
     const finish = (status, body, type) => {
         if (finished) return;
         finished = true;
+        activeRenders--;   // give the slot back
         if (type) res.type(type);
         res.status(status).send(body);
     };
