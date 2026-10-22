@@ -34,6 +34,11 @@ RUN curl -fL --create-dirs -o server/plantuml.jar \
 
 COPY . .
 
+# Without a locale, Java defaults to ASCII and mangles non-ASCII characters
+# (accents, « » stereotypes) in diagrams. 
+# It includes Unicode character set too now.
+ENV LC_ALL=C.UTF-8
+
 EXPOSE 3000
 
 CMD ["node", "server/index.js"]
