@@ -6,9 +6,6 @@ const express = require('express');
 // (like java -jar which is needed for PlantUML API).
 const { spawn } = require('child_process');
 
-// filesystem - import the built-in File System module to perform disk operations.
-const fs = require('fs');
-
 // Import the Path module to manage file directory paths across OSs.
 const path = require('path');
 
@@ -51,7 +48,14 @@ app.post('/render', (req, res) => {
     const java = spawn(
         'java',
         ['-Djava.awt.headless=true', '-jar', JAR_PATH, '-tsvg', '-pipe'],
-        { timeout: RENDER_TIMEOUT_MS } // Node kills the process after this long
+        {
+            timeout: RENDER_TIMEOUT_MS,
+            // SANDBOX: PlantUML can't read local files or fetch URLs.
+            // Hardcoded because a security setting shouldn't be tunable by accident from the host's dashboard.
+            // Without the sandbox, a visitor could write a diagram that pulls in files from the server, or make the server fetch arbitrary URLs. 
+            // SANDBOX blocks both, and it applies to all code run this way, locally and in Docker.
+            env: { ...process.env, PLANTUML_SECURITY_PROFILE: 'SANDBOX' }
+        }
     );
 
     const chunks = [];
