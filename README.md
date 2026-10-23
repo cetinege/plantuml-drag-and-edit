@@ -3,7 +3,7 @@
 A web app for editing PlantUML class diagrams with a draggable layout. Write PlantUML code, render it through a real PlantUML engine, then drag classes and packages around by hand. Runs locally or in Docker. 
 **[Click me to try it out!](https://plantuml-drag-and-edit.onrender.com)**
 
-![Demo](public/assets/Plantuml-Drag-Demo2.gif)
+![Demo](public/assets/plantuml-drag-demo2.gif)
 
 ## Table of Contents
 
