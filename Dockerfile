@@ -44,7 +44,7 @@ COPY . .
 # It includes Unicode character set too now.
 ENV LC_ALL=C.UTF-8
 
-# Run as the unprivileged "node" user that the Node image already provides, instead of root.
+# Run as the unprivileged "node" user that the Node image already provides, instead of root (for extra security).
 # How it works: 
 # -------------
 # By default, everything in a container runs as root.
