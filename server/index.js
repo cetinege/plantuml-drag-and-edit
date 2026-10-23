@@ -6,6 +6,12 @@ const express = require('express');
 // Import the Path module to manage file directory paths across OSs.
 const path = require('path');
 
+// Limits how many requests one visitor (by IP) can make in a time window
+const rateLimit = require('express-rate-limit');
+
+// The long-lived PlantUML process manager (server/worker.js)
+const { createWorker } = require('./worker');
+
 // Create the web app
 const app = express();
 
