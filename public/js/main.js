@@ -14,7 +14,7 @@ lucide.createIcons();
 // Get references to the DOM elements to interact with
 const renderBtn = document.getElementById('renderBtn');
 const codeInput = document.getElementById('code');
-
+const renderStatus = document.getElementById('renderStatus');
 
 // Main initialisation once SVG string is retrieved
 function initDiagram(rawSvg) {
@@ -57,29 +57,41 @@ async function renderDiagram() {
         return;
     }
 
-    let response;
+    // Show the indicator and block double clicks while waiting
+    renderStatus.hidden = false;
+    renderBtn.disabled = true;
+
     try {
-        response = await fetch('/render', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code })
-        });
-    } catch {
-        // fetch only throws when it can't reach the server at all
-        alert('Could not reach the server.');
-        return;
-    }
+        let response;
+        try{
+            response = await fetch('/render', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+        } catch {
+            // fetch only throws when it can't reach the server at all
+            alert('Could not reach the server.');
+            return;
+        }
 
-    if (!response.ok) {
-        const text = await response.text();
-        const isPlainMessage = text.length > 0 && text.length < 200 && !text.startsWith('<');
-        alert(isPlainMessage ? text : 'Server returned an error processing the diagram.');
-        return;
-    }
+        if (!response.ok) {
+            const text = await response.text();
+            const isPlainMessage = text.length > 0 && text.length < 200 && !text.startsWith('<');
+            alert(isPlainMessage ? text : 'Server returned an error processing the diagram.');
+            return;
+        }
 
-    const rawSvg = await response.text();
-    saveSvg(rawSvg);
-    initDiagram(rawSvg);
+        
+        const rawSvg = await response.text();
+        saveSvg(rawSvg);
+        initDiagram(rawSvg);
+
+    } finally {
+        // Runs on success and on every early return above
+        renderStatus.hidden = true;
+        renderBtn.disabled = false;
+    }
 
 }
 
