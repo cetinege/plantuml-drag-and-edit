@@ -4,6 +4,17 @@ A web app for editing PlantUML class diagrams with a draggable layout. Write Pla
 
 ![Demo](public/assets/Plantuml-Drag-Demo2.gif)
 
+## Table of Contents
+
+| Section | Content |
+|---|---|
+| [How To Use](#how-to-use) | Rendering, dragging, exporting and colours |
+| [Why](#why) | Why this tool exists |
+| [How It Works](#how-it-works) | Behind the scenes |
+| [Requirements / How to Install](#requirements) | Docker or a direct install |
+| [Known Limitations](#known-limitations) | What doesn't work or exist yet |
+| [Future Implementations](#future-implementations) | Planned features |
+
 ## How To Use
 
 1. Type PlantUML class diagram code (could work with other diagram types, but haven't been explicitly tested) in the textarea (see example pre-filled on load).
@@ -78,7 +89,7 @@ Current PlantUML versions already group each diagram element in the SVG, so the 
 
 The editor text and the last rendered (pre-drag) diagram are saved in `localStorage` and restored on page load. Dragged positions are not saved (potential future implementation).
 
-## Project Structure
+### Project Structure
 
 ```
 Dockerfile              builds an image with Node, Java, Graphviz and PlantUML
@@ -149,7 +160,7 @@ java -jar server/plantuml.jar -version
 
 The output should end with `Installation seems OK. File generation OK` and show a `GraphViz:` line. If your jar is too old, rendered SVGs will contain `<!--MD5=...-->` comments instead of `class="entity"` and the parser won't work.
 
-## Server Settings
+### Server Settings
 
 Environment variables, all optional:
 
@@ -169,7 +180,7 @@ Example: `MAX_CONCURRENT_RENDERS=4 node server/index.js`. The browser shows the 
 - Java is started with an argument list rather than a shell command, so diagram text is never interpreted as a command.
 - Rate limits and the render cap are kept in memory, per server instance. They stop ordinary abuse, but nothing too serious.
 
-## Deployment Notes
+### Deployment Notes
 
 This app needs a host that can run a Docker container (it needs Java and Graphviz next to Node). Static hosts like Netlify can't run it. They only serve static files or short-lived serverless functions with no Java runtime. A Docker-capable host such as Render works: create a Web Service from this repo with the Docker runtime. The host supplies `PORT`, and the server is set to trust one proxy (`trust proxy` = 1) so rate limiting sees each visitor's real IP. If you put another proxy (e.g. Cloudflare) in front, change that number.
 
