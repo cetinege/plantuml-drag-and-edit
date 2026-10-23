@@ -34,6 +34,7 @@ RUN npm ci --omit=dev
 # -f makes curl fail on an HTTP error. Without it, a wrong URL would save an HTML error page as plantuml.jar and the build would still look fine.
 # -L follows redirects, which GitHub downloads use. --create-dirs creates the server/ folder, since the code isn't copied yet.
 # It sits before COPY . . so code edits don't trigger a re-download. COPY . . won't overwrite the jar, because the .dockerignore excludes server/plantuml.jar.
+ARG PLANTUML_VERSION=1.2026.9
 RUN curl -fL --create-dirs -o server/plantuml.jar \
     https://github.com/plantuml/plantuml/releases/download/v${PLANTUML_VERSION}/plantuml-${PLANTUML_VERSION}.jar
 
