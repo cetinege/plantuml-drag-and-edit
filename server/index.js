@@ -42,8 +42,7 @@ const RENDER_TIMEOUT_MS = Number(process.env.RENDER_TIMEOUT_MS) || 15000;
 
 // Each render starts a JVM, which is memory-hungry. Too many at once can
 // exhaust RAM and take the whole server down, so need to cap how many run together.
-// Default of 2 for now...
-const MAX_CONCURRENT_RENDERS = Number(process.env.MAX_CONCURRENT_RENDERS) || 2;
+const MAX_CONCURRENT_RENDERS = Number(process.env.MAX_CONCURRENT_RENDERS) || 1;
 
 // activeRenders counts the renders in progress. A request takes a slot before starting Java and gives it back in finish. 
 // Every path ends in finish (success, PlantUML failure, timeout or failed start), and its finished flag makes sure it runs only once. 
