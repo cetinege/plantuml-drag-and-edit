@@ -85,7 +85,8 @@ app.post('/render', renderLimiter, (req, res) => {
     // an array (not one shell string), so user input is never run as a command.
     const java = spawn(
         'java',
-        ['-Djava.awt.headless=true', '-jar', JAR_PATH, '-tsvg', '-pipe'],
+        ['-Djava.awt.headless=true', '-XX:TieredStopAtLevel=1', '-XX:+UseSerialGC',
+            '-Xss16m', '-jar', JAR_PATH, '-tsvg', '-pipe'],
         {
             timeout: RENDER_TIMEOUT_MS,
             // SANDBOX: PlantUML can't read local files or fetch URLs.
