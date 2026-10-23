@@ -1,18 +1,12 @@
-// Counts requests per visitor and blocks any visitor who sends too many in a short time.
-const { rateLimit } = require('express-rate-limit');
 
 // Writing a raw HTTP server using Node's built-in http module requires manually parsing URLs, body streams, and static assets.
 // Express provides clean abstractions for routing and middleware.
 const express = require('express');
 
-// spawn starts an external program (Java) and gives us its input/output
-// streams. Arguments are passed as an array, so no shell ever parses them.
-const { spawn } = require('child_process');
-
 // Import the Path module to manage file directory paths across OSs.
 const path = require('path');
 
-// Instantiate express object
+// Create the web app
 const app = express();
 
 // On Render, requests reach this app through Render's proxy, so every
@@ -54,94 +48,68 @@ let activeRenders = 0;
 // Per-IP limit: at most RATE_LIMIT_MAX renders per window. Defaults are
 // generous for a person editing and re-rendering, but stop scripts.
 const renderLimiter = rateLimit({
-    windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 60 * 1000, // 1 minute
-    limit: Number(process.env.RATE_LIMIT_MAX) || 30,
-    standardHeaders: 'draft-7', // tells clients their remaining quota
+    // Length of the window (default 1 minute)
+    windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 60000,
+    // Requests allowed per IP in that window (default 30)
+    max: Number(process.env.RATE_LIMIT_MAX) || 30,
+    // Send the modern RateLimit-* headers so clients can see their limit
+    standardHeaders: true,
+    // Don't send the old X-RateLimit-* headers
     legacyHeaders: false,
-    message: 'Too many renders. Please wait a minute and try again.'
+    // Text sent with the 429 response; the browser shows it in an alert
+    message: 'Too many renders. Please wait a moment and try again.',
 });
 
-// GET requests pass parameters in the URL, which has strict character limits and can break with special characters.
-// POST sends data inside the request body which allows large diagram markup strings.
-app.post('/render', renderLimiter, (req, res) => {
+// Create the worker: it manages the one Java process and applies the timeout
+const worker = createWorker({ jarPath: JAR_PATH, timeoutMs: RENDER_TIMEOUT_MS });
+// Start Java now, at server boot, so the first user's render doesn't pay the startup cost
+worker.warmUp();
 
-    // Extract PlantUML markup string sent from the client/browser
-    const code = req.body && req.body.code;
 
+// The render endpoint; the rate limiter runs first, then our handler (async so we can await the worker)
+app.post('/render', renderLimiter, async (req, res) => {
+    // Take the PlantUML text from the request body
+    const { code } = req.body;
+
+    // Reject missing, non-text or blank input with 400 (bad request)
     if (typeof code !== 'string' || !code.trim()) {
-        return res.status(400).send('Missing PlantUML code.');
+        return res.status(400).send('Missing diagram code.');
     }
 
+    // Helper: how many times a pattern appears in the code (0 if none)
+    const count = (re) => (code.match(re) || []).length;
+    // The worker pairs replies with requests by order, so allow exactly one diagram per request
+    if (count(/@startuml/g) !== 1 || count(/@enduml/g) !== 1) {
+        return res.status(400).send('Use exactly one @startuml ... @enduml block.');
+    }
+  
+    // Too many renders already running or waiting?
     if (activeRenders >= MAX_CONCURRENT_RENDERS) {
-        // 503 = temporarily unavailable. Retry-After tells well-behaved clients
-        // how many seconds to wait before trying again.
+        // Tell the client to retry in 2 seconds
         res.set('Retry-After', '2');
-        return res.status(503).send('Server is busy, please try again in a few seconds.');
+        // 503 = service temporarily unavailable
+        return res.status(503).send('Server is busy. Please try again in a moment.');
     }
-    activeRenders++; // take a slot
 
-    // -pipe: PlantUML reads the diagram from stdin and writes the SVG to
-    // stdout, so there are no temp files at all. spawn takes arguments as
-    // an array (not one shell string), so user input is never run as a command.
-    const java = spawn(
-        'java',
-        ['-Djava.awt.headless=true', '-XX:TieredStopAtLevel=1', '-XX:+UseSerialGC',
-            '-Xss16m', '-jar', JAR_PATH, '-tsvg', '-pipe'],
-        {
-            timeout: RENDER_TIMEOUT_MS,
-            // SANDBOX: PlantUML can't read local files or fetch URLs.
-            // Hardcoded because a security setting shouldn't be tunable by accident from the host's dashboard.
-            // Without the sandbox, a visitor could write a diagram that pulls in files from the server, or make the server fetch arbitrary URLs. 
-            // SANDBOX blocks both, and it applies to all code run this way, locally and in Docker.
-            env: { ...process.env, PLANTUML_SECURITY_PROFILE: 'SANDBOX' }
-        }
-    );
-
-    const chunks = [];
-    let stderr = '';
-    let finished = false;
-
-    // Send exactly one response, even if several events fire
-    const finish = (status, body, type) => {
-        if (finished) return;
-        finished = true;
-        activeRenders--;   // give the slot back
-        if (type) res.type(type);
-        res.status(status).send(body);
-    };
-
-    java.stdout.on('data', (chunk) => chunks.push(chunk));
-    java.stderr.on('data', (chunk) => { stderr += chunk; });
-
-    // If Java exits before we finish writing, Node emits an error on
-    // stdin. With no handler, that error would crash the whole server.
-    java.stdin.on('error', () => {});
-
-    java.on('error', (err) => {
-        console.error('Failed to start Java:', err);
-        finish(500, 'Rendering engine failed to start.');
-    });
-
-    java.on('close', (exitCode, signal) => {
-
-        // A signal means we killed it (timeout)
-        if (signal) {
-            console.error('Render timed out');
-            return finish(504, 'Rendering took too long.');
-        }
-
-        const svg = Buffer.concat(chunks).toString('utf8');
-
-        if (!svg.includes('<svg')) {
-            console.error('PlantUML failed:', { exitCode, stderr });
-            return finish(500, 'PlantUML failed to render.');
-        }
-
-        finish(200, svg, 'image/svg+xml');
-    });
-
-    java.stdin.end(code); // send the diagram text and close stdin
-
+    // This request now counts as running or waiting
+    activeRenders++;
+    try {
+        // Send the code to the worker and wait for the SVG
+        const svg = await worker.render(code);
+        // A valid render always contains an <svg tag; otherwise something went wrong
+        if (!svg.includes('<svg')) return res.status(500).send('Render failed.');
+        // Reply with the SVG and the right content type
+        res.type('image/svg+xml').send(svg);
+    } catch (err) {
+        // The worker rejects with 'timeout' when the render took too long: 504 = gateway timeout
+    if (err.message === 'timeout') return res.status(504).send('Render timed out.');
+        // Any other failure, such as Java crashing: 500 = server error
+        res.status(500).send('Render failed.');
+    } finally {
+        // Runs on success and on every return or error above, so the counter never leaks
+        activeRenders--;
+    }
 });
 
-app.listen(PORT, () => console.log(`Running on port ${PORT}`));
+// Start accepting requests
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

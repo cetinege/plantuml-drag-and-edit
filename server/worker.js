@@ -38,7 +38,10 @@
  * pays the startup cost, which is why the server calls warmUp() at boot.
  */
 
+
 // spawn starts another program (Java) as a child process
+// spawn starts an external program (Java) and gives us its input/output
+// streams. Arguments are passed as an array, so no shell ever parses them.
 const { spawn } = require('child_process');
 
 // Marker PlantUML prints after each SVG, so we know where one result ends
@@ -98,12 +101,12 @@ function createWorker({ jarPath, timeoutMs }) {
 
     // Ignore errors from writing to a process that already died (that's handled on close)
     proc.stdin.on('error', () => {});
-    
+
     // Runs when Java exits, whether it crashed or we killed it
     proc.on('close', () => {
       // Only reset if this is still the current process
       if (proc === me) { proc = null; buf = ''; }
-      // A job was waiting: fail it with 'timeout' if we killed it for that, otherwise 'crashed'
+      // A job was waiting: fail it with 'timeout' if it killed it for that, otherwise 'crashed'
       if (current) done(new Error(current.timedOut ? 'timeout' : 'crashed'));
     });
   }
