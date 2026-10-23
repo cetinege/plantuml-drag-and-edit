@@ -94,8 +94,14 @@ app.post('/render', renderLimiter, async (req, res) => {
     // This request now counts as running or waiting
     activeRenders++;
     try {
+
+        // Note the start time (milliseconds)
+        const t = Date.now();
         // Send the code to the worker and wait for the SVG
         const svg = await worker.render(code);
+        // Log how long the render took to test wheter optimisation worked
+        console.log(`render took ${Date.now() - t} ms`);
+
         // A valid render always contains an <svg tag; otherwise something went wrong
         if (!svg.includes('<svg')) return res.status(500).send('Render failed.');
         // Reply with the SVG and the right content type
