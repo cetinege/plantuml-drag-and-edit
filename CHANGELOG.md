@@ -2,6 +2,61 @@
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-22
+
+Docker deployment and a hardened, public-facing server.
+
+### Added
+- `Dockerfile`: builds one image containing everything the app needs.
+  - Base image `node:24-bookworm-slim`.
+  - Installs Java (`default-jre-headless`), Graphviz, fontconfig and fonts (PlantUML measures text with real fonts to size boxes), `curl` and `ca-certificates`.
+  - Dependencies installed with `npm ci --omit=dev`, copied before the app code so code edits don't reinstall everything (layer caching).
+  - Downloads a pinned PlantUML release at build time (`PLANTUML_VERSION` build argument), so the jar is never committed and builds are repeatable.
+  - Sets `LC_ALL=C.UTF-8` so Java defaults to UTF-8 instead of ASCII (non-ASCII characters will show up fine).
+  - Runs as the unprivileged `node` user instead of root.
+- `.dockerignore`: keeps `node_modules`, `.git`, `.idea` and the local `server/plantuml.jar` out of the image.
+- Per-IP rate limit on `POST /render` (`express-rate-limit`): 30 renders per minute by default, then HTTP 429.
+- `app.set('trust proxy', 1)` so the rate limiter sees each visitor's real IP behind a host's proxy (such as Render) instead of treating everyone as one visitor.
+- Cap on simultaneous renders (default 2): each render starts a JVM, so extra requests get HTTP 503 with a `Retry-After` header instead of exhausting memory.
+- Render timeout (default 15 s): a render that runs too long is killed and returns HTTP 504.
+- Input validation: a missing or non-string `code` field returns HTTP 400.
+- Server settings read from environment variables: `PORT`, `RENDER_TIMEOUT_MS`, `MAX_CONCURRENT_RENDERS`, `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`. They can be tuned on the host without code changes.
+- The browser now shows the server's own message when a render is refused (for example "Server is busy" or "Too many renders"), and a separate message when the server can't be reached at all. Server replies that aren't short plain text (such as a proxy's HTML error page) fall back to a generic message.
+
+### Changed
+- The server now renders with PlantUML's `-pipe` mode: the diagram is written to Java's standard input and the SVG is read from its standard output. There are no temp files any more, and the `fs` module is no longer used.
+- Java is started with `spawn` and an argument array instead of `exec` with a shell command string, so diagram text is never interpreted by a shell (can't run commands).
+- The server listens on `process.env.PORT` (falling back to 3000) so hosting platforms can choose the port.
+- PlantUML runs with `PLANTUML_SECURITY_PROFILE=SANDBOX`, so a diagram can't read local files from the server or fetch URLs. This is set in code (not configurable from the host) so it applies locally and in Docker.
+- Rate limiting and the render cap protect the server from bursts of requests.
+- Because of the sandbox, `!include` (local files or URLs) and remote images no longer work in diagrams.
+
+### Fixed
+- **Concurrent users overwriting each other.** Every render used the same `temp_diagram.puml` and `temp_diagram.svg`, so two visitors at once could receive each other's diagram. Each render now has its own private input and output streams.
+- **Renders that could hang forever** now time out.
+
+## 2026-10-21
+
+Internal refactoring of the project structure. Logic has not changed
+
+### Changed
+- Split the single ~900-line `public/app.js` into native ES modules (no build step) with one responsibility each:
+  - `js/main.js`: entry point that only wires the modules together (moved from `public/app.js`).
+  - `js/config.js`: shared constants (SVG namespace, storage keys, arrowhead size, export padding and scale, colour-picker offsets, sidebar minimum width, code-save delay).
+  - `js/diagram/parser.js`: `buildNodes()`, `groupNodes()`, `buildEdges()`; turns PlantUML's SVG into plain data and builds no UI.
+  - `js/diagram/geometry.js`: pure maths (`rectEdgeIntersection`, `getLabelLineProjection`, `rectsOverlap`, `getSvgPoint`).
+  - `js/diagram/edges.js`: redraws connector lines, arrowheads and labels.
+  - `js/diagram/guides.js`: dashed guide lines for classes dragged out of their package.
+  - `js/diagram/packageColor.js`: per-package colour picker and its positioning.
+  - `js/diagram/drag.js`: drag handling for classes, packages and the title.
+  - `js/ui/canvas.js`: owns the active SVG, canvas sizing and the canvas background colour (still works before anything is rendered, and is re-applied on every render).
+  - `js/ui/splitter.js`: resizable editor column.
+  - `js/ui/exporter.js`: SVG and PNG export.
+  - `js/services/storage.js`: guarded `localStorage` access with debounced saving of the editor text.
+- `index.html` now loads the app with `<script type="module" src="js/main.js">`. Module scripts run after the page is parsed, so the `DOMContentLoaded` wrapper was removed.
+- The package colour picker is no longer created inside `buildNodes()`, which now only parses.
+- `initExportButtons()` receives a getter function (`getActiveSvg`) instead of a variable, so exports always use the current diagram after a re-render.
+
 ## [1.3.0] - 2026-08-24
 
 ### Added
