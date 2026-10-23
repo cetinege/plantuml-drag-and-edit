@@ -1,4 +1,6 @@
 node_modules/
+server/plantuml.jar
 .idea/
 .env
-server/plantuml.jar
+*.log
+.DS_Store
