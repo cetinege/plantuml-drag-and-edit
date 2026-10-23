@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-23
+
+Faster renders and open-source files.
+
+### Added
+- "Rendering diagram…" indicator and disabled Render button while a render is in progress.
+- `server/worker.js`: a long-lived PlantUML worker. One Java process is kept running and renders diagrams one at a time through `-pipe`, so the JVM start-up cost is paid once instead of on every request. A timeout kills a stuck render and the next request restarts Java; a crash fails only the current render.
+- Render duration is logged by the server.
+- Docker build now fails if the downloaded PlantUML jar is missing or empty.
+- Table of contents in the README.
+- `LICENSE` (MIT), `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CONTRIBUTORS.md`, and GitHub issue and pull request templates.
+### Changed
+- `POST /render` renders through the worker and requires exactly one `@startuml … @enduml` block (otherwise HTTP 400).
+- `MAX_CONCURRENT_RENDERS` now limits how many renders may be running or waiting, since renders run one at a time.
+- Java runs with `-XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xmx256m` for faster start-up and lower memory use.
+- The server serves `public/` using a path relative to the server file, so it works from any working directory.
+- Pinned the lucide icon library version.
+- README "How It Works" rewritten as numbered steps describing the worker, and the project structure, limitations and server settings updated.
+### Fixed
+- Deploy failing because the Dockerfile was missing `ARG PLANTUML_VERSION`, which produced a 404 when downloading the jar.
+
+
 ## [2.0.0] - 2026-10-22
 
 Docker deployment and a hardened, public-facing server.

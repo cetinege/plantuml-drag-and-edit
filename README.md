@@ -40,12 +40,13 @@ It doesn't replace PlantUML's rendering or syntax because that part works great 
 
 ## How It Works
 
-1. You write `PlantUML` code in the browser and click Render Diagram. The browser sends the code to the Node server with POST /render.
-2. The server checks the input, applies the per-IP rate limit and the concurrent-render cap, then starts `java -jar plantuml.jar -tsvg -pipe`. The code goes in through Java’s standard input and the finished SVG comes back through its standard output. PlantUML uses `Graphviz` to work out the layout, and runs in a sandbox with a timeout.
-3. The server sends the SVG back and the browser parses it. `g.entity` groups are classes, `g.cluster` groups are packages, `g.link` groups are connectors, and `g.title` is the diagram title. Positions and sizes come from `getBBox()`.
-4. Each class, package and the title gets drag handlers. While you drag, mouse coordinates are converted into SVG space and the element moves with an SVG transform. Connecting lines are redrawn live as straight lines between the box borders using rectangle-edge intersection maths, and labels keep their proportional place along the line.
-5. Packages carry their contained classes along when dragged. Membership comes from the qualified name (`Account.User` belongs to package `Account`). Dragging a class fully outside its package shows a dashed guide line back to it while you hold it.
-6. Export works on a cropped clone of the live SVG, so SVG and PNG files match your dragged layout. The editor text and last render are saved in localStorage.
+1. You write PlantUML code in the browser and click **Render Diagram**. A "Rendering diagram…" indicator shows while the browser sends the code to the Node server with `POST /render`.
+2. The server checks the input (exactly one `@startuml … @enduml` block), applies the per-IP rate limit and the queue cap, then hands the code to a long-lived PlantUML worker.
+3. The worker keeps one `java -jar plantuml.jar -tsvg -pipe` process running. The code goes in through Java's standard input and the finished SVG comes back through its standard output, with a marker after each diagram. Renders run one at a time, so Java's startup cost is paid once, not on every render. PlantUML uses Graphviz to work out the layout, and runs in a sandbox with a timeout.
+4. The server sends the SVG back and the browser parses it. `g.entity` groups are classes, `g.cluster` groups are packages, `g.link` groups are connectors, and `g.title` is the diagram title. Positions and sizes come from `getBBox()`.
+5. Each class, package and the title gets drag handlers. While you drag, mouse coordinates are converted into SVG space and the element moves with an SVG `transform`. Connecting lines are redrawn live as straight lines between the box borders using rectangle-edge maths, and labels keep their proportional place along the line.
+6. Packages carry their contained classes along when dragged. Membership comes from the qualified name (`Account.User` belongs to package `Account`). Dragging a class fully outside its package shows a dashed guide line back to it while you hold it.
+7. Export works on a cropped clone of the live SVG, so SVG and PNG files match your dragged layout. The editor text and last render are saved in `localStorage`.
 
 No PlantUML internals are modified. This project only adds a drag layer on top of its SVG output.
 
@@ -98,6 +99,7 @@ Dockerfile              builds an image with Node, Java, Graphviz and PlantUML
 package.json
 server/
   index.js              Express server: /render endpoint, limits, spawns Java
+  worker.js             keeps one PlantUML (Java) process alive and queues renders
   plantuml.jar          PlantUML (download it yourself locally; Docker fetches it)
 public/
   index.html
@@ -169,7 +171,7 @@ Environment variables, all optional:
 |---|---|---|
 | `PORT` | `3000` | Port to listen on (hosts like Render set this themselves) |
 | `RENDER_TIMEOUT_MS` | `15000` | A render running longer than this is killed (HTTP 504) |
-| `MAX_CONCURRENT_RENDERS` | `2` | Max renders at once, since each starts a JVM. Extra requests get HTTP 503 |
+| `MAX_CONCURRENT_RENDERS` | `2` | Max renders running or waiting in line (renders run one at a time). Extra requests get HTTP 503 |
 | `RATE_LIMIT_MAX` | `30` | Max renders per visitor (by IP) per window. Over the limit gets HTTP 429 |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Length of the rate-limit window |
 
@@ -179,7 +181,8 @@ Example: `MAX_CONCURRENT_RENDERS=4 node server/index.js`. The browser shows the 
 
 - PlantUML runs with `PLANTUML_SECURITY_PROFILE=SANDBOX`, so a diagram can't read files from the server or fetch URLs. As a result, `!include` and remote images don't work.
 - Java is started with an argument list rather than a shell command, so diagram text is never interpreted as a command.
-- Rate limits and the render cap are kept in memory, per server instance. They stop ordinary abuse, but nothing too serious.
+- Each request must contain exactly one `@startuml … @enduml` block, because the worker matches replies to requests by order.
+- Rate limits and the render cap are kept in memory, per server instance. They stop ordinary abuse, but they are not a substitute for something like Cloudflare in front of the app if you expect real attacks.
 
 ### Deployment Notes
 
